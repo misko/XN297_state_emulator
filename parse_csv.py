@@ -1,5 +1,6 @@
 import sys
 import bisect
+import functools
 
 if len(sys.argv)!=4:
 	print(sys.argv[0],"time[0/1] mosi.csv spi_enable.csv")
@@ -88,6 +89,11 @@ def read_bytes(f,n,timeout=0.0001):
 def to_hex(s):
 	return "0x"+".".join([ hex(x)[2:] for x in s ])
 
+
+def compute_checksum(s,key):
+	#this checsum is the first byte of a radio message
+	checksum=functools.reduce(lambda a,b : a ^ b , s[1:]+[key])
+
 class XN297:
 	registers={ } #TODO add defaults
 
@@ -115,10 +121,6 @@ class XN297:
 		self.registers[register_name]=read_bytes(f,nbytes)
 		return 'REG: %s, VAL: %s' % (register_name,to_hex(self.registers[register_name]))
 
-			
-			
-		
-
 xn297=XN297()
 
 while line:
@@ -134,10 +136,12 @@ while line:
 	elif 0x61 == mosi_val:
 		command="READ RX"
 		payload=read_bytes(f,xn297.payload_length)
+		compute_checksum(payload,0x79)
 		additional_str="(channel %d) RX<- %s" % (xn297.channel,to_hex(payload)) 
 	elif 0xA0 == mosi_val:
 		command="WRITE TX"
 		payload=read_bytes(f,xn297.payload_length)
+		compute_checksum(payload,0x6d)
 		additional_str="(channel %d) TX-> %s" % (xn297.channel,to_hex(payload)) 
 	elif 0xE1 == mosi_val:
 		command="FLUSH TX"

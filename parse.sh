@@ -1,6 +1,6 @@
 for d in data/*; do
 	echo $d
-	python3 parse_csv.py 0 $d/mosi.csv $d/spienable.csv > $d/xn297_state      
+	python3 parse_csv.py 0 $d/mosi.csv.gz $d/spienable.csv.gz > $d/xn297_state      
 	grep "RX\|TX" $d/xn297_state | sort | uniq -c > $d/all_RXTX
 	grep "RX" $d/xn297_state | sort | uniq -c > $d/all_RX
 	grep "TX" $d/xn297_state | sort | uniq -c > $d/all_TX

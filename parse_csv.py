@@ -1,3 +1,4 @@
+import gzip
 import sys
 import bisect
 import functools
@@ -11,13 +12,14 @@ fn_mosi=sys.argv[2]
 fn_spienable=sys.argv[3]
 
 spi_enable=[]
-f_spienable=open(fn_spienable,'r')
+f_spienable=gzip.open(fn_spienable,'r')
 f_spienable.readline()
 for line in f_spienable:
+	line=line.decode('utf8').strip()
 	time_str,spi_enable_state=line.split(',')
 	spi_enable.append((float(time_str),spi_enable_state))
 
-f=open(fn_mosi,'r')
+f=gzip.open(fn_mosi,'r')
 f.readline() # header
 
 line=f.readline()
@@ -67,7 +69,7 @@ def read_bytes(f,n,timeout=0.0001):
 	prev_time=-1
 	while n>0:
 		prev_pos=f.tell()
-		line=f.readline()
+		line=f.readline().decode('utf8').strip()
 		time_str,id_str,mosi_str,miso_str = line.split(',')
 		time=float(time_str)
 		if prev_time<0:
@@ -124,6 +126,7 @@ class XN297:
 xn297=XN297()
 
 while line:
+	line=line.decode('utf8').strip()
 	time_str,id_str,mosi_str,miso_str = line.split(',')
 	mosi_val=int(mosi_str,16)
 	additional_str=""

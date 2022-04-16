@@ -64,6 +64,22 @@ register_table={
 register_id_table={ v[0]:(k,v[1]) for k,v in register_table.items()}
 	
 
+tx_payload_map={
+	'lCtrl_v':{'type':'range','min':0x00,'max':0xfa,'idle':0x7d,'byte':4},
+	'lCtrl_h':{'type':'range','min':0x00,'max':0xfa,'idle':0x7d,'byte':5},
+	'rCtrl_v':{'type':'range','min':0x00,'max':0xfa,'idle':0x7d,'byte':6},
+	'rCtrl_h':{'type':'range','min':0x00,'max':0xfa,'idle':0x7d,'byte':7},
+	'channel_pulse':{'type':'indicator','byte':12,'bit':6},
+	'gpshome_b':{'type':'indicator','byte':12,'bit':5},
+	'picture_b':{'type':'indicator','byte':12,'bit':0},
+	'high_low_b':{'type':'indicator','byte':12,'bit':1},
+	'takeoff_b':{'type':'indicator','byte':13,'bit':4},
+	'lock_b':{'type':'indicator','byte':13,'bit':6},
+	'gpsen_b':{'type':'indicator','byte':14,'bit':6},
+}
+
+
+
 def read_bytes(f,n,timeout=0.0001):
 	bytes_=[]
 	prev_time=-1
@@ -92,9 +108,15 @@ def to_hex(s):
 	return "0x"+".".join([ hex(x)[2:] for x in s ])
 
 
-def compute_checksum(s,key):
+def compute_checksum_tx(s,key):
 	#this checsum is the first byte of a radio message
 	checksum=functools.reduce(lambda a,b : a ^ b , s[1:]+[key])
+	return checksum
+
+def compute_checksum_rx(s,key):
+	#this checsum is the first byte of a radio message
+	checksum=functools.reduce(lambda a,b : a + b , s[1:]+[key])
+	return checksum&0xff
 
 class XN297:
 	registers={ } #TODO add defaults
@@ -123,6 +145,21 @@ class XN297:
 		self.registers[register_name]=read_bytes(f,nbytes)
 		return 'REG: %s, VAL: %s' % (register_name,to_hex(self.registers[register_name]))
 
+	def parse_tx(self,p):
+		print([hex(x) for x in p])
+		r={}
+		for k,v in tx_payload_map.items():
+			if v['type']=='range':
+				int_val=p[v['byte']]
+				if False and int_val==v['idle']:
+					r[k]='IDLE'
+				else:
+					r[k]=((float(int_val)-v['min'])/(v['max']-v['min'])-0.5)*200 # return percent
+			elif v['type']=='indicator':
+				bit=(v['byte']>>v['bit'])&0x01
+				r[k]=(bit==1)	
+		print(r)
+		
 xn297=XN297()
 
 while line:
@@ -139,13 +176,14 @@ while line:
 	elif 0x61 == mosi_val:
 		command="READ RX"
 		payload=read_bytes(f,xn297.payload_length)
-		compute_checksum(payload,0x79)
-		additional_str="(channel %d) RX<- %s" % (xn297.channel,to_hex(payload)) 
+		cs=compute_checksum_rx(payload,0x6d)
+		additional_str="(channel %d) (cs:%s)RX<- %s" % (xn297.channel,hex(cs),to_hex(payload)) 
 	elif 0xA0 == mosi_val:
 		command="WRITE TX"
 		payload=read_bytes(f,xn297.payload_length)
-		compute_checksum(payload,0x6d)
-		additional_str="(channel %d) TX-> %s" % (xn297.channel,to_hex(payload)) 
+		cs=compute_checksum_tx(payload,0x6d)
+		xn297.parse_tx(payload)
+		additional_str="(channel %d) (cs:%s)TX-> %s" % (xn297.channel,hex(cs),to_hex(payload)) 
 	elif 0xE1 == mosi_val:
 		command="FLUSH TX"
 		read_bytes(f,1)

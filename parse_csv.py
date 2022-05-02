@@ -69,13 +69,13 @@ tx_payload_map={
 	'lCtrl_h':{'type':'range','min':0x00,'max':0xfa,'idle':0x7d,'byte':5},
 	'rCtrl_v':{'type':'range','min':0x00,'max':0xfa,'idle':0x7d,'byte':6},
 	'rCtrl_h':{'type':'range','min':0x00,'max':0xfa,'idle':0x7d,'byte':7},
-	'channel_pulse':{'type':'indicator','byte':12,'bit':6},
-	'gpshome_b':{'type':'indicator','byte':12,'bit':5},
-	'picture_b':{'type':'indicator','byte':12,'bit':0},
-	'high_low_b':{'type':'indicator','byte':12,'bit':1},
-	'takeoff_b':{'type':'indicator','byte':13,'bit':4},
-	'lock_b':{'type':'indicator','byte':13,'bit':6},
-	'gpsen_b':{'type':'indicator','byte':14,'bit':6},
+	'channel_pulse':{'type':'indicator','byte':12,'bit':6,'invert':False},
+	'gpshome_b':{'type':'indicator','byte':12,'bit':5,'invert':False},
+	'picture_b':{'type':'indicator','byte':12,'bit':0,'invert':False},
+	'high_low_b':{'type':'indicator','byte':12,'bit':1,'invert':False},
+	'takeoff_b':{'type':'indicator','byte':13,'bit':4,'invert':True},
+	'lock_b':{'type':'indicator','byte':13,'bit':6,'invert':True},
+	'gpsen_b':{'type':'indicator','byte':14,'bit':6,'invert':False},
 }
 
 
@@ -120,6 +120,7 @@ def compute_checksum_rx(s,key):
 
 class XN297:
 	registers={ } #TODO add defaults
+	binding=None
 
 	@property 
 	def address_width(self):
@@ -143,6 +144,14 @@ class XN297:
 	def w_register(self,register,f):
 		register_name,nbytes=register_id_table[register]
 		self.registers[register_name]=read_bytes(f,nbytes)
+		if register_name=='RX_ADDR_P0' and self.binding!=None:
+			bind_sum = self.binding[1]+self.binding[2]
+			bindA = bind_sum&0x0F
+			bindB = (bind_sum>>4)&0x0F
+			print("BINDING %s->%s %s->%s %s %s" % (hex(bindA),hex(self.registers[register_name][0]),
+							hex(bindB),hex(self.registers[register_name][2]),
+							to_hex(self.registers[register_name]),to_hex(self.binding)))
+			self.binding=None
 		return 'REG: %s, VAL: %s' % (register_name,to_hex(self.registers[register_name]))
 
 	def parse_tx(self,p):
@@ -156,8 +165,8 @@ class XN297:
 				else:
 					r[k]=((float(int_val)-v['min'])/(v['max']-v['min'])-0.5)*200 # return percent
 			elif v['type']=='indicator':
-				bit=(v['byte']>>v['bit'])&0x01
-				r[k]=(bit==1)	
+				bit=(p[v['byte']]>>v['bit'])&0x01
+				r[k]=(bit==1)!=v['invert']	
 		print(r)
 		
 xn297=XN297()
@@ -176,6 +185,8 @@ while line:
 	elif 0x61 == mosi_val:
 		command="READ RX"
 		payload=read_bytes(f,xn297.payload_length)
+		if xn297.channel in [55,68,59,65]:
+			xn297.binding=payload
 		cs=compute_checksum_rx(payload,0x6d)
 		additional_str="(channel %d) (cs:%s)RX<- %s" % (xn297.channel,hex(cs),to_hex(payload)) 
 	elif 0xA0 == mosi_val:
